@@ -3,6 +3,22 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def load_dotenv(dotenv_path):
+    if not dotenv_path.exists():
+        return
+
+    for raw_line in dotenv_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+
+        key, value = line.split('=', 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_dotenv(BASE_DIR / '.env')
+
 SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     "django-insecure-5e9060u4+139)s#b3un3-d70fo2n57%k11se_*m=8ssw5((*6!",
@@ -106,6 +122,7 @@ EMAIL_HOST_PASSWORD = os.getenv('DJANGO_EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('DJANGO_EMAIL_USE_TLS', '0') == '1'
 EMAIL_USE_SSL = os.getenv('DJANGO_EMAIL_USE_SSL', '0') == '1'
 DEFAULT_FROM_EMAIL = os.getenv('DJANGO_DEFAULT_FROM_EMAIL', 'reminder@app.local')
+EMAIL_TIMEOUT = int(os.getenv('DJANGO_EMAIL_TIMEOUT', '20'))
 APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://127.0.0.1:8000')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

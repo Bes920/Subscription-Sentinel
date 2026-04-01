@@ -7,7 +7,9 @@ htmlcov/
 .DS_Store
 .env
 .env.*
+!.env.example
 .venv/
 venv/
 db.sqlite3
 staticfiles/
+cron.log

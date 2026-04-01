@@ -1,7 +1,9 @@
 from datetime import date
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core import mail
+from django.core.management import call_command
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import Subscription
@@ -121,4 +123,41 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Spotify')
         self.assertNotContains(response, 'Private App')
 
-# Create your tests here.
+
+@override_settings(
+    EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+    DEFAULT_FROM_EMAIL='alerts@example.com',
+    APP_BASE_URL='http://127.0.0.1:8000',
+)
+class ReminderCommandTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='mailer',
+            email='mailer@example.com',
+            password='testpass123',
+        )
+
+    def test_send_subscription_reminders_sends_email_in_reminder_window(self):
+        Subscription.objects.create(
+            owner=self.user,
+            platform='Spotify',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='alerts@example.com',
+            price='9.99',
+            currency='USD',
+        )
+
+        call_command('send_subscription_reminders', date='2026-04-01')
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('Spotify renews in 7 days', mail.outbox[0].subject)
+        self.assertEqual(mail.outbox[0].to, ['alerts@example.com'])
+
+    def test_send_test_email_command_sends_one_message(self):
+        call_command('send_test_email', 'alerts@example.com')
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['alerts@example.com'])
+        self.assertEqual(mail.outbox[0].from_email, 'alerts@example.com')
