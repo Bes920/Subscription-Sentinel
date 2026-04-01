@@ -1,0 +1,48 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Subscription Sentinel{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'subscriptions/app.css' %}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="site-header">
+            <a class="brand" href="{% url 'dashboard' %}">
+                <span class="brand-mark">S</span>
+                <span>
+                    <strong>Subscription Sentinel</strong>
+                    <small>Track renewals before they surprise you.</small>
+                </span>
+            </a>
+            <nav class="site-nav">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'dashboard' %}">Dashboard</a>
+                    <a href="{% url 'subscription-create' %}">New tracker</a>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="button button-ghost">Log out</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}">Log in</a>
+                    <a href="{% url 'signup' %}" class="button button-primary">Create account</a>
+                {% endif %}
+            </nav>
+        </header>
+
+        {% if messages %}
+            <section class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </section>
+        {% endif %}
+
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

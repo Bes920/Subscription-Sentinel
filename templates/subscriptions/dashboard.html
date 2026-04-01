@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard | Subscription Sentinel{% endblock %}
+
+{% block content %}
+<section class="dashboard-hero panel">
+    <div>
+        <p class="eyebrow">Renewal watchlist</p>
+        <h1>Your subscriptions, with the risky ones surfaced first.</h1>
+        <p>
+            Each tracker calculates the next billing date from the billing anchor and
+            custom cycle you entered. Reminder emails run daily during the final 7 days.
+        </p>
+    </div>
+    <a href="{% url 'subscription-create' %}" class="button button-primary">Create a new sub-control</a>
+</section>
+
+<section class="summary-grid">
+    <article class="panel summary-card">
+        <span class="summary-label">Active plans</span>
+        <strong>{{ summary.active_count }}</strong>
+    </article>
+    <article class="panel summary-card">
+        <span class="summary-label">Due in 7 days</span>
+        <strong>{{ summary.due_soon_count }}</strong>
+    </article>
+    <article class="panel summary-card">
+        <span class="summary-label">Due today</span>
+        <strong>{{ summary.due_today_count }}</strong>
+    </article>
+    <article class="panel summary-card">
+        <span class="summary-label">Canceled archive</span>
+        <strong>{{ summary.canceled_count }}</strong>
+    </article>
+</section>
+
+{% if active_subscriptions %}
+    <section class="subscription-grid">
+        {% for subscription in active_subscriptions %}
+            <article class="panel subscription-card {% if subscription.in_reminder_window %}danger-panel{% elif subscription.is_due_today %}warning-panel{% endif %}">
+                <div class="subscription-topline">
+                    <div>
+                        <p class="eyebrow">{{ subscription.currency }} {{ subscription.price }}</p>
+                        <h2>{{ subscription.display_name }}</h2>
+                    </div>
+                    <span class="status-badge {% if subscription.is_due_today %}status-due{% elif subscription.in_reminder_window %}status-warning{% else %}status-ok{% endif %}">
+                        {% if subscription.is_due_today %}
+                            Due today
+                        {% elif subscription.in_reminder_window %}
+                            Reminder window
+                        {% else %}
+                            Active
+                        {% endif %}
+                    </span>
+                </div>
+
+                <dl class="details-grid">
+                    <div>
+                        <dt>Next billing</dt>
+                        <dd>{{ subscription.upcoming_billing_date|date:'M d, Y' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Time remaining</dt>
+                        <dd>
+                            {% if subscription.days_until_renewal == 0 %}
+                                Today
+                            {% elif subscription.days_until_renewal == 1 %}
+                                1 day
+                            {% else %}
+                                {{ subscription.days_until_renewal }} days
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Cycle</dt>
+                        <dd>{{ subscription.cycle_description }}</dd>
+                    </div>
+                    <div>
+                        <dt>Reminder email</dt>
+                        <dd>{{ subscription.reminder_email }}</dd>
+                    </div>
+                </dl>
+
+                {% if subscription.notes %}
+                    <p class="note-block">{{ subscription.notes }}</p>
+                {% endif %}
+
+                <div class="card-actions">
+                    <a href="{% url 'subscription-update' subscription.pk %}" class="button button-secondary">Edit</a>
+                    <form method="post" action="{% url 'subscription-cancel' subscription.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="button button-ghost">Cancel tracking</button>
+                    </form>
+                </div>
+            </article>
+        {% endfor %}
+    </section>
+{% else %}
+    <section class="panel empty-state">
+        <h2>No active subscriptions yet.</h2>
+        <p>Add your first tracker to start calculating renewal dates and daily reminder emails.</p>
+        <a href="{% url 'subscription-create' %}" class="button button-primary">Add subscription</a>
+    </section>
+{% endif %}
+
+{% if canceled_subscriptions %}
+    <section class="panel archive-panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Paused</p>
+                <h2>Canceled subscriptions</h2>
+            </div>
+        </div>
+        <div class="archive-list">
+            {% for subscription in canceled_subscriptions %}
+                <article class="archive-row">
+                    <div>
+                        <strong>{{ subscription.display_name }}</strong>
+                        <p>{{ subscription.currency }} {{ subscription.price }} · {{ subscription.cycle_description }}</p>
+                    </div>
+                    <form method="post" action="{% url 'subscription-activate' subscription.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="button button-secondary">Reactivate</button>
+                    </form>
+                </article>
+            {% endfor %}
+        </div>
+    </section>
+{% endif %}
+{% endblock %}

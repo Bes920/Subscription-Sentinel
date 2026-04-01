@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if object %}Edit{% else %}New{% endif %} Subscription | Subscription Sentinel{% endblock %}
+
+{% block content %}
+<section class="editor-layout">
+    <div class="hero-copy">
+        <p class="eyebrow">Billing logic</p>
+        <h1>{% if object %}Edit tracker{% else %}Create a new sub-control{% endif %}</h1>
+        <p>
+            Enter the billing anchor date, the custom cycle length, and the cycle unit.
+            The app calculates the next renewal automatically from there.
+        </p>
+    </div>
+
+    <form method="post" class="panel form-panel wide-form">
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="field">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                    <div class="field-help">{{ field.help_text }}</div>
+                {% endif %}
+                {% if field.errors %}
+                    <div class="field-error">{{ field.errors|join:', ' }}</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <div class="form-actions">
+            <button type="submit" class="button button-primary">
+                {% if object %}Save changes{% else %}Create tracker{% endif %}
+            </button>
+            <a href="{% url 'dashboard' %}" class="button button-ghost">Back to dashboard</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

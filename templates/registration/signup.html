@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Account | Subscription Sentinel{% endblock %}
+
+{% block content %}
+<section class="auth-panel">
+    <div class="hero-copy">
+        <p class="eyebrow">Personal renewal control</p>
+        <h1>Set up your private subscription dashboard.</h1>
+        <p>
+            Create an account, add the services you pay for, and let the app remind
+            you each day during the last week before a renewal hits.
+        </p>
+    </div>
+
+    <form method="post" class="panel form-panel">
+        {% csrf_token %}
+        <h2>Create account</h2>
+        {% for field in form %}
+            <div class="field">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                    <div class="field-help">{{ field.help_text }}</div>
+                {% endif %}
+                {% if field.errors %}
+                    <div class="field-error">{{ field.errors|join:', ' }}</div>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="button button-primary">Create account</button>
+        <p class="helper-copy">
+            Already have an account? <a href="{% url 'login' %}">Log in</a>.
+        </p>
+    </form>
+</section>
+{% endblock %}
