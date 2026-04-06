@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -37,6 +38,22 @@ class Subscription(models.Model):
     reminder_email = models.EmailField()
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     currency = models.CharField(max_length=3, default='USD')
+    advance_reminder_days = models.PositiveIntegerField(
+        default=14,
+        help_text='Send one reminder when this many days remain.',
+    )
+    repeat_reminder_start_days = models.PositiveIntegerField(
+        default=7,
+        help_text='Start morning and night reminders when this many days remain.',
+    )
+    repeat_reminder_morning = models.BooleanField(
+        default=True,
+        help_text='Send morning reminders inside the repeated reminder window.',
+    )
+    repeat_reminder_night = models.BooleanField(
+        default=True,
+        help_text='Send night reminders inside the repeated reminder window.',
+    )
     status = models.CharField(
         max_length=10,
         choices=Status.choices,
@@ -44,6 +61,7 @@ class Subscription(models.Model):
     )
     notes = models.TextField(blank=True)
     last_reminder_sent_on = models.DateField(null=True, blank=True)
+    last_reminder_key = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -56,6 +74,16 @@ class Subscription(models.Model):
     @property
     def display_name(self):
         return f'{self.platform} - {self.plan_name}' if self.plan_name else self.platform
+
+    def clean(self):
+        if self.advance_reminder_days <= self.repeat_reminder_start_days:
+            raise ValidationError(
+                {
+                    'advance_reminder_days': (
+                        'The advance reminder must happen before the repeated reminder window starts.'
+                    )
+                }
+            )
 
     @staticmethod
     def _days_in_month(year, month):
@@ -143,7 +171,15 @@ class Subscription(models.Model):
     @property
     def in_reminder_window(self):
         days = self.days_until_renewal
-        return days is not None and 1 <= days <= 7
+        return days is not None and 1 <= days <= self.repeat_reminder_start_days
+
+    @property
+    def is_advance_reminder_day(self):
+        return self.days_until_renewal == self.advance_reminder_days
+
+    @property
+    def needs_reminder_attention(self):
+        return self.is_advance_reminder_day or self.in_reminder_window
 
     @property
     def cycle_description(self):
@@ -152,20 +188,77 @@ class Subscription(models.Model):
             return f'Every {unit_label}'
         return f'Every {self.cycle_length} {unit_label}s'
 
-    def should_send_reminder(self, on_date=None):
+    @property
+    def reminder_schedule_description(self):
+        cadence = []
+        cadence.append(f'1 email at {self.advance_reminder_days} days remaining')
+
+        times = []
+        if self.repeat_reminder_morning:
+            times.append('morning')
+        if self.repeat_reminder_night:
+            times.append('night')
+
+        if times:
+            if len(times) == 2:
+                time_summary = 'morning and night'
+            else:
+                time_summary = times[0]
+            cadence.append(
+                f'{time_summary} from {self.repeat_reminder_start_days} days remaining'
+            )
+
+        return ', then '.join(cadence)
+
+    @staticmethod
+    def resolve_reminder_slot(slot='auto'):
+        if slot in {'morning', 'night'}:
+            return slot
+
+        current_hour = timezone.localtime().hour
+        return 'morning' if current_hour < 15 else 'night'
+
+    def get_pending_reminder(self, on_date=None, slot='auto'):
         if self.status != self.Status.ACTIVE:
-            return False
+            return None
 
         run_date = on_date or timezone.localdate()
         billing_date = self.get_next_billing_date(run_date)
         if billing_date is None:
-            return False
+            return None
 
         days_until = (billing_date - run_date).days
-        return 1 <= days_until <= 7 and self.last_reminder_sent_on != run_date
+        resolved_slot = self.resolve_reminder_slot(slot)
+
+        if days_until == self.advance_reminder_days:
+            reminder_key = f'{billing_date.isoformat()}:{days_until}:advance'
+            reminder_label = f'{days_until}-day reminder'
+        elif 1 <= days_until <= self.repeat_reminder_start_days:
+            if resolved_slot == 'morning' and not self.repeat_reminder_morning:
+                return None
+            if resolved_slot == 'night' and not self.repeat_reminder_night:
+                return None
+
+            reminder_key = f'{billing_date.isoformat()}:{days_until}:{resolved_slot}'
+            reminder_label = f'{resolved_slot.capitalize()} reminder'
+        else:
+            return None
+
+        if self.last_reminder_key == reminder_key:
+            return None
+
+        return {
+            'billing_date': billing_date,
+            'days_until': days_until,
+            'slot': resolved_slot,
+            'key': reminder_key,
+            'label': reminder_label,
+        }
+
+    def should_send_reminder(self, on_date=None, slot='auto'):
+        return self.get_pending_reminder(on_date=on_date, slot=slot) is not None
 
     def save(self, *args, **kwargs):
         self.currency = (self.currency or '').upper()
+        self.full_clean()
         super().save(*args, **kwargs)
-
-# Create your models here.

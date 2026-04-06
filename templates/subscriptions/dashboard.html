@@ -9,7 +9,8 @@
         <h1>Your subscriptions, with the risky ones surfaced first.</h1>
         <p>
             Each tracker calculates the next billing date from the billing anchor and
-            custom cycle you entered. Reminder emails run daily during the final 7 days.
+            custom cycle you entered. Reminder emails follow the rule you choose for
+            that subscription, including an early heads-up and a final repeated window.
         </p>
     </div>
     <a href="{% url 'subscription-create' %}" class="button button-primary">Create a new sub-control</a>
@@ -21,7 +22,7 @@
         <strong>{{ summary.active_count }}</strong>
     </article>
     <article class="panel summary-card">
-        <span class="summary-label">Due in 7 days</span>
+        <span class="summary-label">In repeat window</span>
         <strong>{{ summary.due_soon_count }}</strong>
     </article>
     <article class="panel summary-card">
@@ -47,7 +48,9 @@
                         {% if subscription.is_due_today %}
                             Due today
                         {% elif subscription.in_reminder_window %}
-                            Reminder window
+                            Morning + night
+                        {% elif subscription.is_advance_reminder_day %}
+                            {{ subscription.advance_reminder_days }}-day alert
                         {% else %}
                             Active
                         {% endif %}
@@ -79,6 +82,10 @@
                         <dt>Reminder email</dt>
                         <dd>{{ subscription.reminder_email }}</dd>
                     </div>
+                    <div>
+                        <dt>Reminder plan</dt>
+                        <dd>{{ subscription.reminder_schedule_description }}</dd>
+                    </div>
                 </dl>
 
                 {% if subscription.notes %}
@@ -98,7 +105,7 @@
 {% else %}
     <section class="panel empty-state">
         <h2>No active subscriptions yet.</h2>
-        <p>Add your first tracker to start calculating renewal dates and daily reminder emails.</p>
+        <p>Add your first tracker to start calculating renewal dates and rule-based reminder emails.</p>
         <a href="{% url 'subscription-create' %}" class="button button-primary">Add subscription</a>
     </section>
 {% endif %}

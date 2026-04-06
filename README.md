@@ -6,7 +6,7 @@ Subscription Sentinel is a small Django app for tracking recurring plans and war
 - multiple tracked subscriptions per account
 - weekly, monthly, yearly, and custom billing cycles
 - price and currency storage
-- daily email reminders during the final 7 days before renewal
+- configurable reminder rules, including an early alert and repeated final-window reminders
 - paused reminders when a subscription is marked canceled
 
 ## Local setup
@@ -67,7 +67,7 @@ For Gmail:
 Important:
 
 - Gmail requires an App Password, not your normal account password.
-- Reminder emails only send when a subscription is `1` to `7` days away from renewal.
+- Reminder emails follow each subscription's own reminder rule.
 - If your test subscription is outside that window, `send_subscription_reminders` will correctly send nothing.
 
 To verify real delivery directly:
@@ -96,14 +96,17 @@ Force a reminder test against a date inside the 7-day window:
 python3 manage.py send_subscription_reminders --date 2026-04-01
 ```
 
-## Automate daily reminders
+## Automate reminder runs
 
-You do not need to run `send_subscription_reminders` manually forever. The normal setup is to schedule it once per day. The Django web server does not need to be running for this command to work.
+You do not need to run `send_subscription_reminders` manually forever. The normal setup is to schedule it automatically. The Django web server does not need to be running for this command to work.
 
-Recommended command:
+With the default reminder rule, one email is sent when `14` days remain, then morning and night emails are sent during the final `7` days. To support both morning and night reminders, schedule the command twice per day with an explicit slot.
+
+Recommended commands:
 
 ```bash
-/usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
+/usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders --slot morning >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
+/usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders --slot night >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
 ```
 
 This version uses absolute paths and writes output to `cron.log` so failures are easier to debug.
@@ -116,10 +119,11 @@ Open your user crontab:
 crontab -e
 ```
 
-Add this line to run reminders every day at `08:00`:
+Add these lines to run reminders every day at `08:00` and `20:00`:
 
 ```cron
-0 8 * * * /usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
+0 8 * * * /usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders --slot morning >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
+0 20 * * * /usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders --slot night >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
 ```
 
 Save and exit, then verify it:
@@ -145,7 +149,8 @@ crontab -e
 Add:
 
 ```cron
-0 8 * * * /usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
+0 8 * * * /usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders --slot morning >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
+0 20 * * * /usr/bin/python3 /home/exploitforge/Documents/edu/reminder/manage.py send_subscription_reminders --slot night >> /home/exploitforge/Documents/edu/reminder/cron.log 2>&1
 ```
 
 Then confirm it was saved:
@@ -172,7 +177,8 @@ Windows does not use `crontab`. Use Task Scheduler instead.
 4. Set the action to `Start a program`.
 5. Use your Python executable as the program.
 6. Pass the Django command as arguments.
-7. Set the start-in directory to the project root.
+7. Create one task for `morning` and one for `night`.
+8. Set the start-in directory to the project root.
 
 Example values:
 
@@ -185,7 +191,13 @@ C:\Path\To\Python\python.exe
 - Add arguments:
 
 ```text
-manage.py send_subscription_reminders
+manage.py send_subscription_reminders --slot morning
+```
+
+For the second task, use:
+
+```text
+manage.py send_subscription_reminders --slot night
 ```
 
 - Start in:
@@ -198,10 +210,10 @@ If you want a Linux-style `crontab` on Windows, the usual approach is to run the
 
 ### Notes
 
-- The machine must be on at `08:00` for the scheduled job to run.
+- The machine must be on at the scheduled run times for the job to run.
 - The project `.env` file is read automatically by the app, so you do not need to manually source it in cron.
 - Internet access is required for SMTP delivery.
-- Only subscriptions whose next billing date is `1` to `7` days away will send emails.
+- Only subscriptions whose next billing date matches a configured reminder rule will send emails.
 
 ## Deploy instead of relying on a local machine
 
@@ -218,7 +230,7 @@ Typical deployment shape:
 - deploy the Django app to a Linux server, VPS, or platform service
 - configure the same `.env` email variables on the server
 - run migrations on the deployed app
-- add one scheduled daily job on the server to run `send_subscription_reminders`
+- add scheduled jobs on the server to run `send_subscription_reminders` for the reminder slots you want
 
 The command remains the same:
 
@@ -237,7 +249,7 @@ Examples of deployment approaches:
 In all of those cases, the important point is the same:
 
 - the web app serves the dashboard
-- a daily scheduled job runs at `08:00`
+- scheduled reminder jobs run automatically at the times you choose
 - that job sends reminder emails automatically
 
 If you deploy it, you usually do not need local cron anymore.

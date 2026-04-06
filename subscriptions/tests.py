@@ -68,13 +68,59 @@ class SubscriptionModelTests(TestCase):
         )
 
         run_date = date(2026, 4, 1)
-        self.assertTrue(subscription.should_send_reminder(run_date))
+        reminder = subscription.get_pending_reminder(run_date, slot='morning')
+        self.assertIsNotNone(reminder)
+        self.assertTrue(subscription.should_send_reminder(run_date, slot='morning'))
 
         subscription.last_reminder_sent_on = run_date
-        self.assertFalse(subscription.should_send_reminder(run_date))
+        subscription.last_reminder_key = reminder['key']
+        self.assertFalse(subscription.should_send_reminder(run_date, slot='morning'))
 
         subscription.status = Subscription.Status.CANCELED
-        self.assertFalse(subscription.should_send_reminder(run_date))
+        self.assertFalse(subscription.should_send_reminder(run_date, slot='morning'))
+
+    def test_advance_reminder_only_sends_once_on_the_advance_day(self):
+        subscription = Subscription.objects.create(
+            owner=self.user,
+            platform='Netflix',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='alerts@example.com',
+            price='10.00',
+            currency='usd',
+        )
+
+        run_date = date(2026, 3, 25)
+        advance_reminder = subscription.get_pending_reminder(run_date, slot='morning')
+
+        self.assertIsNotNone(advance_reminder)
+        self.assertEqual(advance_reminder['label'], '14-day reminder')
+
+        subscription.last_reminder_key = advance_reminder['key']
+        self.assertIsNone(subscription.get_pending_reminder(run_date, slot='night'))
+
+    def test_morning_and_night_reminders_can_both_send_in_repeat_window(self):
+        subscription = Subscription.objects.create(
+            owner=self.user,
+            platform='Spotify',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='alerts@example.com',
+            price='9.99',
+            currency='usd',
+        )
+
+        run_date = date(2026, 4, 1)
+        morning_reminder = subscription.get_pending_reminder(run_date, slot='morning')
+        self.assertIsNotNone(morning_reminder)
+        self.assertEqual(morning_reminder['label'], 'Morning reminder')
+
+        subscription.last_reminder_key = morning_reminder['key']
+        night_reminder = subscription.get_pending_reminder(run_date, slot='night')
+        self.assertIsNotNone(night_reminder)
+        self.assertEqual(night_reminder['label'], 'Night reminder')
 
 
 class DashboardViewTests(TestCase):
@@ -137,7 +183,7 @@ class ReminderCommandTests(TestCase):
             password='testpass123',
         )
 
-    def test_send_subscription_reminders_sends_email_in_reminder_window(self):
+    def test_send_subscription_reminders_sends_advance_email(self):
         Subscription.objects.create(
             owner=self.user,
             platform='Spotify',
@@ -149,11 +195,49 @@ class ReminderCommandTests(TestCase):
             currency='USD',
         )
 
-        call_command('send_subscription_reminders', date='2026-04-01')
+        call_command('send_subscription_reminders', date='2026-03-25', slot='morning')
 
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('Spotify renews in 7 days', mail.outbox[0].subject)
+        self.assertIn('14 day', mail.outbox[0].subject)
+        self.assertIn('14-day reminder', mail.outbox[0].body)
+
+    def test_send_subscription_reminders_sends_morning_and_night_in_repeat_window(self):
+        Subscription.objects.create(
+            owner=self.user,
+            platform='Spotify',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='alerts@example.com',
+            price='9.99',
+            currency='USD',
+        )
+
+        call_command('send_subscription_reminders', date='2026-04-01', slot='morning')
+        call_command('send_subscription_reminders', date='2026-04-01', slot='night')
+
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIn('7 days left', mail.outbox[0].subject)
+        self.assertIn('Morning reminder', mail.outbox[0].body)
+        self.assertIn('Night reminder', mail.outbox[1].body)
         self.assertEqual(mail.outbox[0].to, ['alerts@example.com'])
+
+    def test_send_subscription_reminders_does_not_duplicate_same_slot(self):
+        Subscription.objects.create(
+            owner=self.user,
+            platform='HTB',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='alerts@example.com',
+            price='9.99',
+            currency='USD',
+        )
+
+        call_command('send_subscription_reminders', date='2026-04-01', slot='morning')
+        call_command('send_subscription_reminders', date='2026-04-01', slot='morning')
+
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_send_test_email_command_sends_one_message(self):
         call_command('send_test_email', 'alerts@example.com')

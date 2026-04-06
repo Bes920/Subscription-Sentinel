@@ -9,7 +9,7 @@ from subscriptions.models import Subscription
 
 
 class Command(BaseCommand):
-    help = 'Send daily reminder emails for subscriptions that renew within 7 days.'
+    help = 'Send subscription reminders based on each subscription reminder rule.'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -22,6 +22,12 @@ class Command(BaseCommand):
             action='store_true',
             help='Print matching reminders without sending email.',
         )
+        parser.add_argument(
+            '--slot',
+            choices=['auto', 'morning', 'night'],
+            default='auto',
+            help='Which reminder slot this run represents. Auto resolves from the current local time.',
+        )
 
     def handle(self, *args, **options):
         run_date = (
@@ -30,27 +36,33 @@ class Command(BaseCommand):
             else None
         )
         dry_run = options['dry_run']
+        slot = options['slot']
         sent_count = 0
 
         subscriptions = Subscription.objects.filter(status=Subscription.Status.ACTIVE).select_related('owner')
         for subscription in subscriptions:
             current_date = run_date or timezone.localdate()
-            if not subscription.should_send_reminder(on_date=current_date):
+            reminder = subscription.get_pending_reminder(on_date=current_date, slot=slot)
+            if reminder is None:
                 continue
 
-            billing_date = subscription.get_next_billing_date(reference_date=current_date)
-            days_until = (billing_date - current_date).days
-            subject = f'{subscription.display_name} renews in {days_until} day{"s" if days_until != 1 else ""}'
+            billing_date = reminder['billing_date']
+            days_until = reminder['days_until']
+            subject = f'{subscription.display_name} renewal reminder: {days_until} day{"s" if days_until != 1 else ""} left'
             message = (
+                f'{reminder["label"]}\n\n'
                 f'Your {subscription.display_name} subscription will renew on {billing_date:%B %d, %Y}.\n\n'
                 f'Price: {subscription.currency} {subscription.price}\n'
                 f'Billing cycle: {subscription.cycle_description}\n'
+                f'Reminder plan: {subscription.reminder_schedule_description}\n'
                 f'Reminder email: {subscription.reminder_email}\n\n'
                 f'Review it in the dashboard: {settings.APP_BASE_URL}\n'
             )
 
             if dry_run:
-                self.stdout.write(f'[dry-run] {subscription.reminder_email}: {subject}')
+                self.stdout.write(
+                    f'[dry-run] {subscription.reminder_email}: {subject} ({reminder["label"]})'
+                )
             else:
                 send_mail(
                     subject=subject,
@@ -60,7 +72,8 @@ class Command(BaseCommand):
                     fail_silently=False,
                 )
                 subscription.last_reminder_sent_on = current_date
-                subscription.save(update_fields=['last_reminder_sent_on', 'updated_at'])
+                subscription.last_reminder_key = reminder['key']
+                subscription.save(update_fields=['last_reminder_sent_on', 'last_reminder_key', 'updated_at'])
 
             sent_count += 1
 

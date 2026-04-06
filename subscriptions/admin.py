@@ -11,11 +11,13 @@ class SubscriptionAdmin(admin.ModelAdmin):
         'owner',
         'status',
         'upcoming_billing_date',
+        'advance_reminder_days',
+        'repeat_reminder_start_days',
         'price',
         'currency',
     )
     list_filter = ('status', 'cycle_unit', 'currency')
     search_fields = ('platform', 'plan_name', 'owner__username', 'reminder_email')
-    readonly_fields = ('created_at', 'updated_at', 'last_reminder_sent_on')
+    readonly_fields = ('created_at', 'updated_at', 'last_reminder_sent_on', 'last_reminder_key')
 
 # Register your models here.
