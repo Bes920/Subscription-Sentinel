@@ -241,3 +241,34 @@ In all of those cases, the important point is the same:
 - that job sends reminder emails automatically
 
 If you deploy it, you usually do not need local cron anymore.
+
+## Keep older versions downloadable
+
+If you want people to keep downloading an older version after you make new changes, use Git tags and GitHub Releases.
+
+This repository includes a GitHub Actions workflow at [.github/workflows/release.yml](/home/exploitforge/Documents/edu/reminder/.github/workflows/release.yml) that does this:
+
+- when you push a version tag like `v1.0.0`
+- GitHub creates a Release for that version
+- the workflow attaches downloadable `.zip` and `.tar.gz` archives of that version
+
+That means later commits on `main` do not remove access to earlier releases.
+
+### How to publish a downloadable version
+
+After you decide a version is ready, create and push a tag:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions will then build release archives for that exact version and attach them to the GitHub Release page.
+
+### How users download an older version
+
+Users can go to the repository `Releases` page and choose the version they want, for example `v1.0.0`, then download the attached archive.
+
+### Manual release option
+
+The workflow also supports manual runs from the GitHub Actions tab with a version input if you want to trigger a release from the GitHub UI.
