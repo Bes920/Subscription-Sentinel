@@ -1,6 +1,6 @@
 import calendar
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -9,6 +9,8 @@ from django.utils import timezone
 
 
 class Subscription(models.Model):
+    CURRENCY_PRECISION = Decimal('0.01')
+
     class CycleUnit(models.TextChoices):
         DAY = 'day', 'Day'
         WEEK = 'week', 'Week'
@@ -187,6 +189,28 @@ class Subscription(models.Model):
         if self.cycle_length == 1:
             return f'Every {unit_label}'
         return f'Every {self.cycle_length} {unit_label}s'
+
+    @classmethod
+    def _round_currency(cls, amount):
+        return amount.quantize(cls.CURRENCY_PRECISION, rounding=ROUND_HALF_UP)
+
+    @property
+    def billing_events_per_year(self):
+        if self.cycle_unit == self.CycleUnit.DAY:
+            return Decimal('365') / Decimal(self.cycle_length)
+        if self.cycle_unit == self.CycleUnit.WEEK:
+            return Decimal('52') / Decimal(self.cycle_length)
+        if self.cycle_unit == self.CycleUnit.MONTH:
+            return Decimal('12') / Decimal(self.cycle_length)
+        return Decimal('1') / Decimal(self.cycle_length)
+
+    @property
+    def estimated_monthly_cost(self):
+        return self._round_currency(self.estimated_yearly_cost / Decimal('12'))
+
+    @property
+    def estimated_yearly_cost(self):
+        return self._round_currency(Decimal(self.price) * self.billing_events_per_year)
 
     @property
     def reminder_schedule_description(self):

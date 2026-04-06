@@ -132,7 +132,8 @@ h2 {
 }
 
 .summary-grid,
-.subscription-grid {
+.subscription-grid,
+.analytics-grid {
     display: grid;
     gap: 1rem;
 }
@@ -144,6 +145,11 @@ h2 {
 
 .subscription-grid {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.analytics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    margin-bottom: 1.4rem;
 }
 
 .summary-card strong {
@@ -263,6 +269,14 @@ h2 {
     margin: 1.2rem 0;
 }
 
+.subscription-card .details-grid {
+    grid-template-columns: 1fr;
+}
+
+.details-grid > div {
+    min-width: 0;
+}
+
 dt {
     font-size: 0.8rem;
     margin-bottom: 0.35rem;
@@ -271,16 +285,69 @@ dt {
 dd {
     margin: 0;
     font-weight: 600;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .note-block {
+    display: block;
+    width: 100%;
     padding: 0.95rem 1rem;
     border-radius: var(--radius-md);
     background: var(--bg-strong);
+    overflow-wrap: anywhere;
 }
 
 .archive-panel {
     margin-top: 1.4rem;
+}
+
+.analytics-panel {
+    padding: 1.4rem;
+}
+
+.analytics-list,
+.impact-list {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.analytics-row,
+.impact-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+}
+
+.analytics-row:first-child,
+.impact-row:first-child {
+    padding-top: 0;
+    border-top: 0;
+}
+
+.analytics-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
+    margin: 0;
+    min-width: min(100%, 360px);
+}
+
+.impact-values {
+    text-align: right;
+}
+
+.impact-values strong,
+.impact-values span {
+    display: block;
+}
+
+.impact-values span {
+    color: var(--ink-soft);
+    margin-top: 0.2rem;
 }
 
 .archive-list {
@@ -402,6 +469,16 @@ dd {
 
     .details-grid {
         grid-template-columns: 1fr;
+    }
+
+    .analytics-row,
+    .impact-row {
+        flex-direction: column;
+    }
+
+    .analytics-stats {
+        grid-template-columns: 1fr;
+        min-width: 100%;
     }
 
     .button,

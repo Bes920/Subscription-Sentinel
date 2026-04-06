@@ -7,6 +7,7 @@ Subscription Sentinel is a small Django app for tracking recurring plans and war
 - weekly, monthly, yearly, and custom billing cycles
 - price and currency storage
 - configurable reminder rules, including an early alert and repeated final-window reminders
+- dashboard analytics for estimated monthly and yearly spend
 - paused reminders when a subscription is marked canceled
 
 ## Local setup

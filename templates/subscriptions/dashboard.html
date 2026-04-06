@@ -35,6 +35,66 @@
     </article>
 </section>
 
+{% if spend_breakdown %}
+    <section class="analytics-grid">
+        <article class="panel analytics-panel">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Spending summary</p>
+                    <h2>Estimated recurring cost by currency</h2>
+                </div>
+            </div>
+            <div class="analytics-list">
+                {% for bucket in spend_breakdown %}
+                    <article class="analytics-row">
+                        <div>
+                            <strong>{{ bucket.currency }}</strong>
+                            <p>{{ bucket.active_count }} active plan{{ bucket.active_count|pluralize }}</p>
+                        </div>
+                        <dl class="analytics-stats">
+                            <div>
+                                <dt>Monthly</dt>
+                                <dd>{{ bucket.currency }} {{ bucket.monthly_total }}</dd>
+                            </div>
+                            <div>
+                                <dt>Yearly</dt>
+                                <dd>{{ bucket.currency }} {{ bucket.yearly_total }}</dd>
+                            </div>
+                            <div>
+                                <dt>Next 30 days</dt>
+                                <dd>{{ bucket.currency }} {{ bucket.upcoming_30_total }}</dd>
+                            </div>
+                        </dl>
+                    </article>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="panel analytics-panel">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Largest monthly impact</p>
+                    <h2>Top subscriptions by estimated monthly cost</h2>
+                </div>
+            </div>
+            <div class="impact-list">
+                {% for subscription in top_monthly_subscriptions %}
+                    <article class="impact-row">
+                        <div>
+                            <strong>{{ subscription.display_name }}</strong>
+                            <p>{{ subscription.cycle_description }} · renews {{ subscription.upcoming_billing_date|date:'M d, Y' }}</p>
+                        </div>
+                        <div class="impact-values">
+                            <strong>{{ subscription.currency }} {{ subscription.estimated_monthly_cost }}/mo</strong>
+                            <span>{{ subscription.currency }} {{ subscription.estimated_yearly_cost }}/yr</span>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+{% endif %}
+
 {% if active_subscriptions %}
     <section class="subscription-grid">
         {% for subscription in active_subscriptions %}
@@ -77,6 +137,10 @@
                     <div>
                         <dt>Cycle</dt>
                         <dd>{{ subscription.cycle_description }}</dd>
+                    </div>
+                    <div>
+                        <dt>Monthly impact</dt>
+                        <dd>{{ subscription.currency }} {{ subscription.estimated_monthly_cost }}</dd>
                     </div>
                     <div>
                         <dt>Reminder email</dt>

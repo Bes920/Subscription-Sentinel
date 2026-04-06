@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -122,6 +123,21 @@ class SubscriptionModelTests(TestCase):
         self.assertIsNotNone(night_reminder)
         self.assertEqual(night_reminder['label'], 'Night reminder')
 
+    def test_estimated_monthly_and_yearly_costs_are_normalized_from_cycle(self):
+        subscription = Subscription.objects.create(
+            owner=self.user,
+            platform='Quarterly Tool',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=3,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='alerts@example.com',
+            price='18.00',
+            currency='usd',
+        )
+
+        self.assertEqual(subscription.estimated_monthly_cost, Decimal('6.00'))
+        self.assertEqual(subscription.estimated_yearly_cost, Decimal('72.00'))
+
 
 class DashboardViewTests(TestCase):
     def setUp(self):
@@ -168,6 +184,59 @@ class DashboardViewTests(TestCase):
 
         self.assertContains(response, 'Spotify')
         self.assertNotContains(response, 'Private App')
+
+    def test_dashboard_includes_spending_breakdown_and_top_monthly_costs(self):
+        monthly = Subscription.objects.create(
+            owner=self.user,
+            platform='Spotify',
+            anchor_date=date(2026, 4, 21),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='owner@example.com',
+            price='9.99',
+            currency='USD',
+        )
+        yearly = Subscription.objects.create(
+            owner=self.user,
+            platform='Annual VPN',
+            anchor_date=date(2026, 4, 16),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.YEAR,
+            reminder_email='owner@example.com',
+            price='120.00',
+            currency='USD',
+        )
+        Subscription.objects.create(
+            owner=self.user,
+            platform='Design App',
+            anchor_date=date(2026, 6, 1),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='owner@example.com',
+            price='15.00',
+            currency='EUR',
+        )
+
+        self.client.login(username='owner', password='testpass123')
+        response = self.client.get(reverse('dashboard'))
+
+        spend_breakdown = response.context['spend_breakdown']
+        usd_bucket = next(bucket for bucket in spend_breakdown if bucket['currency'] == 'USD')
+        eur_bucket = next(bucket for bucket in spend_breakdown if bucket['currency'] == 'EUR')
+
+        self.assertEqual(usd_bucket['active_count'], 2)
+        self.assertEqual(usd_bucket['monthly_total'], Decimal('19.99'))
+        self.assertEqual(usd_bucket['yearly_total'], Decimal('239.88'))
+        self.assertEqual(usd_bucket['upcoming_30_total'], Decimal('129.99'))
+        self.assertEqual(usd_bucket['upcoming_30_count'], 2)
+        self.assertEqual(eur_bucket['monthly_total'], Decimal('15.00'))
+
+        top_monthly = response.context['top_monthly_subscriptions']
+        self.assertEqual(top_monthly[0].platform, 'Design App')
+        self.assertEqual(top_monthly[1].pk, yearly.pk)
+        self.assertEqual(top_monthly[2].pk, monthly.pk)
+        self.assertContains(response, 'Estimated recurring cost by currency')
+        self.assertContains(response, 'Top subscriptions by estimated monthly cost')
 
 
 @override_settings(
