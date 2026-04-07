@@ -63,7 +63,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         subscriptions = list(
-            Subscription.objects.filter(owner=self.request.user).order_by('platform', 'plan_name')
+            Subscription.objects.filter(owner=self.request.user)
+            .prefetch_related('notification_history')
+            .order_by('platform', 'plan_name')
         )
 
         active_subscriptions = [
@@ -92,6 +94,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             reverse=True,
         )[:5]
 
+        history_by_subscription = {
+            subscription.pk: subscription.notification_history.all()[:3]
+            for subscription in active_subscriptions
+        }
+        for subscription in active_subscriptions:
+            subscription.history = history_by_subscription.get(subscription.pk, [])
+
         context.update(
             {
                 'active_subscriptions': active_subscriptions,
@@ -108,6 +117,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 },
                 'spend_breakdown': spend_breakdown,
                 'top_monthly_subscriptions': top_monthly_subscriptions,
+                'history_by_subscription': history_by_subscription,
             }
         )
         return context

@@ -286,3 +286,32 @@ class Subscription(models.Model):
         self.currency = (self.currency or '').upper()
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def log_reminder(self, reminder, run_date):
+        return NotificationHistory.objects.create(
+            subscription=self,
+            sent_at=timezone.localtime(),
+            slot=reminder['slot'],
+            days_until=reminder['days_until'],
+            label=reminder['label'],
+            reminder_key=reminder['key'],
+        )
+
+
+class NotificationHistory(models.Model):
+    subscription = models.ForeignKey(
+        Subscription,
+        on_delete=models.CASCADE,
+        related_name='notification_history',
+    )
+    sent_at = models.DateTimeField()
+    slot = models.CharField(max_length=10)
+    days_until = models.PositiveIntegerField()
+    label = models.CharField(max_length=120)
+    reminder_key = models.CharField(max_length=120)
+
+    class Meta:
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f'{self.subscription.display_name} {self.label} ({self.days_until} days left)'

@@ -7,7 +7,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Subscription
+from .models import NotificationHistory, Subscription
 
 
 class SubscriptionModelTests(TestCase):
@@ -238,6 +238,25 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, 'Estimated recurring cost by currency')
         self.assertContains(response, 'Top subscriptions by estimated monthly cost')
 
+    def test_dashboard_displays_recent_history(self):
+        subscription = Subscription.objects.create(
+            owner=self.user,
+            platform='Notifier',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='owner@example.com',
+            price='9.99',
+            currency='USD',
+        )
+
+        call_command('send_subscription_reminders', date='2026-04-01', slot='morning')
+        self.client.login(username='owner', password='testpass123')
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'Recent reminders')
+        self.assertContains(response, 'Morning reminder')
+
 
 @override_settings(
     EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
@@ -290,6 +309,23 @@ class ReminderCommandTests(TestCase):
         self.assertIn('Morning reminder', mail.outbox[0].body)
         self.assertIn('Night reminder', mail.outbox[1].body)
         self.assertEqual(mail.outbox[0].to, ['alerts@example.com'])
+
+    def test_send_subscription_reminders_records_history(self):
+        subscription = Subscription.objects.create(
+            owner=self.user,
+            platform='Notifier',
+            anchor_date=date(2026, 4, 8),
+            cycle_length=1,
+            cycle_unit=Subscription.CycleUnit.MONTH,
+            reminder_email='alerts@example.com',
+            price='9.99',
+            currency='USD',
+        )
+
+        call_command('send_subscription_reminders', date='2026-04-01', slot='morning')
+        history = NotificationHistory.objects.filter(subscription=subscription)
+        self.assertEqual(history.count(), 1)
+        self.assertEqual(history.first().slot, 'morning')
 
     def test_send_subscription_reminders_does_not_duplicate_same_slot(self):
         Subscription.objects.create(

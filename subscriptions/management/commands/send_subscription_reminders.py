@@ -74,6 +74,7 @@ class Command(BaseCommand):
                 subscription.last_reminder_sent_on = current_date
                 subscription.last_reminder_key = reminder['key']
                 subscription.save(update_fields=['last_reminder_sent_on', 'last_reminder_key', 'updated_at'])
+                subscription.log_reminder(reminder, current_date)
 
             sent_count += 1
 

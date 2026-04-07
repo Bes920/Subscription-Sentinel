@@ -156,6 +156,20 @@
                     <p class="note-block">{{ subscription.notes }}</p>
                 {% endif %}
 
+                {% if subscription.history %}
+                    <div class="history-block">
+                        <p class="eyebrow">Recent reminders</p>
+                        <ul>
+                            {% for entry in subscription.history %}
+                                <li>
+                                    {{ entry.label }} · {{ entry.days_until }} days left ·
+                                    {{ entry.sent_at|date:"M d, H:i" }}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
                 <div class="card-actions">
                     <a href="{% url 'subscription-update' subscription.pk %}" class="button button-secondary">Edit</a>
                     <form method="post" action="{% url 'subscription-cancel' subscription.pk %}">
