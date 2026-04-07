@@ -1,4 +1,5 @@
 from collections import defaultdict
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -25,10 +26,46 @@ class SignUpView(CreateView):
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'subscriptions/dashboard.html'
 
+    @staticmethod
+    def _format_currency_breakdown(active_subscriptions):
+        spend_by_currency = defaultdict(
+            lambda: {
+                'active_count': 0,
+                'monthly_total': Decimal('0.00'),
+                'yearly_total': Decimal('0.00'),
+                'upcoming_30_total': Decimal('0.00'),
+                'upcoming_30_count': 0,
+            }
+        )
+
+        for subscription in active_subscriptions:
+            bucket = spend_by_currency[subscription.currency]
+            bucket['active_count'] += 1
+            bucket['monthly_total'] += subscription.estimated_monthly_cost
+            bucket['yearly_total'] += subscription.estimated_yearly_cost
+
+            if subscription.days_until_renewal is not None and 0 <= subscription.days_until_renewal <= 30:
+                bucket['upcoming_30_total'] += subscription.price
+                bucket['upcoming_30_count'] += 1
+
+        return [
+            {
+                'currency': currency,
+                'active_count': values['active_count'],
+                'monthly_total': values['monthly_total'].quantize(Decimal('0.01')),
+                'yearly_total': values['yearly_total'].quantize(Decimal('0.01')),
+                'upcoming_30_total': values['upcoming_30_total'].quantize(Decimal('0.01')),
+                'upcoming_30_count': values['upcoming_30_count'],
+            }
+            for currency, values in sorted(spend_by_currency.items())
+        ]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         subscriptions = list(
-            Subscription.objects.filter(owner=self.request.user).order_by('platform', 'plan_name')
+            Subscription.objects.filter(owner=self.request.user)
+            .prefetch_related('notification_history')
+            .order_by('platform', 'plan_name')
         )
 
         active_subscriptions = [
@@ -47,10 +84,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             for subscription in subscriptions
             if subscription.status == Subscription.Status.CANCELED
         ]
+        spend_breakdown = self._format_currency_breakdown(active_subscriptions)
+        top_monthly_subscriptions = sorted(
+            active_subscriptions,
+            key=lambda subscription: (
+                subscription.estimated_monthly_cost,
+                subscription.price,
+            ),
+            reverse=True,
+        )[:5]
 
-        spend_by_currency = defaultdict(int)
+        history_by_subscription = {
+            subscription.pk: subscription.notification_history.all()[:3]
+            for subscription in active_subscriptions
+        }
         for subscription in active_subscriptions:
-            spend_by_currency[subscription.currency] += 1
+            subscription.history = history_by_subscription.get(subscription.pk, [])
 
         context.update(
             {
@@ -66,7 +115,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                     ),
                     'canceled_count': len(canceled_subscriptions),
                 },
-                'tracked_currencies': sorted(spend_by_currency.keys()),
+                'spend_breakdown': spend_breakdown,
+                'top_monthly_subscriptions': top_monthly_subscriptions,
+                'history_by_subscription': history_by_subscription,
             }
         )
         return context
@@ -121,7 +172,8 @@ class SubscriptionStatusView(LoginRequiredMixin, View):
         subscription.status = self.status
         if self.status == Subscription.Status.ACTIVE:
             subscription.last_reminder_sent_on = None
-        subscription.save(update_fields=['status', 'last_reminder_sent_on', 'updated_at'])
+            subscription.last_reminder_key = ''
+        subscription.save(update_fields=['status', 'last_reminder_sent_on', 'last_reminder_key', 'updated_at'])
         messages.success(request, self.success_message)
         return HttpResponseRedirect(reverse('dashboard'))
 
@@ -134,5 +186,3 @@ class SubscriptionCancelView(SubscriptionStatusView):
 class SubscriptionActivateView(SubscriptionStatusView):
     status = Subscription.Status.ACTIVE
     success_message = 'Subscription tracking reactivated.'
-
-# Create your views here.

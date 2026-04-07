@@ -9,7 +9,8 @@
         <h1>Your subscriptions, with the risky ones surfaced first.</h1>
         <p>
             Each tracker calculates the next billing date from the billing anchor and
-            custom cycle you entered. Reminder emails run daily during the final 7 days.
+            custom cycle you entered. Reminder emails follow the rule you choose for
+            that subscription, including an early heads-up and a final repeated window.
         </p>
     </div>
     <a href="{% url 'subscription-create' %}" class="button button-primary">Create a new sub-control</a>
@@ -21,7 +22,7 @@
         <strong>{{ summary.active_count }}</strong>
     </article>
     <article class="panel summary-card">
-        <span class="summary-label">Due in 7 days</span>
+        <span class="summary-label">In repeat window</span>
         <strong>{{ summary.due_soon_count }}</strong>
     </article>
     <article class="panel summary-card">
@@ -33,6 +34,66 @@
         <strong>{{ summary.canceled_count }}</strong>
     </article>
 </section>
+
+{% if spend_breakdown %}
+    <section class="analytics-grid">
+        <article class="panel analytics-panel">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Spending summary</p>
+                    <h2>Estimated recurring cost by currency</h2>
+                </div>
+            </div>
+            <div class="analytics-list">
+                {% for bucket in spend_breakdown %}
+                    <article class="analytics-row">
+                        <div>
+                            <strong>{{ bucket.currency }}</strong>
+                            <p>{{ bucket.active_count }} active plan{{ bucket.active_count|pluralize }}</p>
+                        </div>
+                        <dl class="analytics-stats">
+                            <div>
+                                <dt>Monthly</dt>
+                                <dd>{{ bucket.currency }} {{ bucket.monthly_total }}</dd>
+                            </div>
+                            <div>
+                                <dt>Yearly</dt>
+                                <dd>{{ bucket.currency }} {{ bucket.yearly_total }}</dd>
+                            </div>
+                            <div>
+                                <dt>Next 30 days</dt>
+                                <dd>{{ bucket.currency }} {{ bucket.upcoming_30_total }}</dd>
+                            </div>
+                        </dl>
+                    </article>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="panel analytics-panel">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Largest monthly impact</p>
+                    <h2>Top subscriptions by estimated monthly cost</h2>
+                </div>
+            </div>
+            <div class="impact-list">
+                {% for subscription in top_monthly_subscriptions %}
+                    <article class="impact-row">
+                        <div>
+                            <strong>{{ subscription.display_name }}</strong>
+                            <p>{{ subscription.cycle_description }} · renews {{ subscription.upcoming_billing_date|date:'M d, Y' }}</p>
+                        </div>
+                        <div class="impact-values">
+                            <strong>{{ subscription.currency }} {{ subscription.estimated_monthly_cost }}/mo</strong>
+                            <span>{{ subscription.currency }} {{ subscription.estimated_yearly_cost }}/yr</span>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+{% endif %}
 
 {% if active_subscriptions %}
     <section class="subscription-grid">
@@ -47,7 +108,9 @@
                         {% if subscription.is_due_today %}
                             Due today
                         {% elif subscription.in_reminder_window %}
-                            Reminder window
+                            Morning + night
+                        {% elif subscription.is_advance_reminder_day %}
+                            {{ subscription.advance_reminder_days }}-day alert
                         {% else %}
                             Active
                         {% endif %}
@@ -76,13 +139,35 @@
                         <dd>{{ subscription.cycle_description }}</dd>
                     </div>
                     <div>
+                        <dt>Monthly impact</dt>
+                        <dd>{{ subscription.currency }} {{ subscription.estimated_monthly_cost }}</dd>
+                    </div>
+                    <div>
                         <dt>Reminder email</dt>
                         <dd>{{ subscription.reminder_email }}</dd>
+                    </div>
+                    <div>
+                        <dt>Reminder plan</dt>
+                        <dd>{{ subscription.reminder_schedule_description }}</dd>
                     </div>
                 </dl>
 
                 {% if subscription.notes %}
                     <p class="note-block">{{ subscription.notes }}</p>
+                {% endif %}
+
+                {% if subscription.history %}
+                    <div class="history-block">
+                        <p class="eyebrow">Recent reminders</p>
+                        <ul>
+                            {% for entry in subscription.history %}
+                                <li>
+                                    {{ entry.label }} · {{ entry.days_until }} days left ·
+                                    {{ entry.sent_at|date:"M d, H:i" }}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                 {% endif %}
 
                 <div class="card-actions">
@@ -98,7 +183,7 @@
 {% else %}
     <section class="panel empty-state">
         <h2>No active subscriptions yet.</h2>
-        <p>Add your first tracker to start calculating renewal dates and daily reminder emails.</p>
+        <p>Add your first tracker to start calculating renewal dates and rule-based reminder emails.</p>
         <a href="{% url 'subscription-create' %}" class="button button-primary">Add subscription</a>
     </section>
 {% endif %}
